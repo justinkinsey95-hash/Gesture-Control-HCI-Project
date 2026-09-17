@@ -1,17 +1,8 @@
 import cv2
 import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
 import time
+import camera
 
-# https://www.youtube.com/watch?v=1lN4L74BwWo
-
-"""
-mp_hands is old and the new API requires more work.
-API expects you to explicitly load a hand-landmarker model file and configure how you're using it
-"""
-#mp_hands = mp.solutions.hands        # finds the hands
-#mp_draw = mp.solutions.drawing_utils # draws on the hands
 
 # the boilerplate new API setup for configuring the detector
 BaseOptions = mp.tasks.BaseOptions
@@ -29,71 +20,47 @@ options = HandLandmarkerOptions(
 
 landmarker = HandLandmarker.create_from_options(options)
 
-
-cap = cv2.VideoCapture(0)            # 0 is default webcam
-
 def main():
-
-    # MediaPipe video mode requires each timestamp to be greater than the last
+    cap = camera.setup_camera()
     timestamp_ms = 0
 
-    # success means capture is good and the frame object is called "frame"
-    while True:
+    while cap.isOpened():
         success, frame = cap.read()
         attempts = 0
-        while not success and attempts <= 5:   # caps our retries when the frame isn't read
+
+        while not success and attempts <= 5:  # caps our attempts to retry getting frames
             time.sleep(1)
             attempts += 1
             success, frame = cap.read()
-        if not success:                         # lets the use know the frame isn't captured
+
+        if not success:
             print("Frame is not being captured in main")
             break
 
-        #---------Prepare the frame----------#
-        image = cv2.flip(frame, 1) # flip the captured frame for mirroring
+        # Prepare the frame
+        image, mp_image = camera.prepare_frame(frame) # image -> mirroring, mp_image -> mediapipe
 
-        # OpenCV BGR -> RGB
-        rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        # OpenCV image -> MediaPipe image
-        mp_image = mp.Image(
-            image_format=mp.ImageFormat.SRGB,
-            data=rgb_frame
-        )
-
-        #----------------MEDIAPIPE----------------#
-
-        # MediaPipe needs a timestamp for video mode
+        # Mediapipe needs a timestamp for video mode
         timestamp_ms += 1
 
-        # Send this frame to the hand detector
-        result = landmarker.detect_for_video(
+        # detect landmarks
+        result = camera.track_hands(
+            landmarker,
             mp_image,
             timestamp_ms
         )
 
-        # just to see if hands were found
-        print("Number of hands:", len(result.hand_landmarks))
+        # draw landmarks
+        image = camera.draw_landmarks_on_hands(image, result)
 
-        # Draw each detected hand's landmarks
-        height, width, _ = image.shape
-
-        for hand in result.hand_landmarks:
-            for landmark in hand:
-                # Convert MediaPipe coordinates to OpenCV pixel coordinates
-                x = int(landmark.x * width)
-                y = int(landmark.y * height)
-
-                cv2.circle(image, (x, y), 5, (0, 255, 0), -1)
-
-        # ---------------- DISPLAY ----------------
-
+        # Display landmarked hand(s)
         cv2.imshow("Frame", image)
-
 
         # how to close the window capture by breaking the while loop
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+
 
     cap.release()
     cv2.destroyAllWindows()
