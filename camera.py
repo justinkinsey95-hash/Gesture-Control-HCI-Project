@@ -59,3 +59,21 @@ def draw_landmarks_on_hands(image, result):
             cv2.circle(image, (x, y), 5, (0, 255, 0), -1)
 
     return image
+
+
+def draw_scroll_feedback(image, direction, label):
+    """Draw a readable status and a large arrow for an active scroll burst."""
+    height, width = image.shape[:2]
+    cv2.rectangle(image, (0, 0), (width, 53), (25, 25, 25), -1)
+    cv2.putText(image, label, (12, 33), cv2.FONT_HERSHEY_SIMPLEX,
+                min(0.7, width / 900), (0, 255, 0), 2, cv2.LINE_AA)
+    cv2.rectangle(image, (0, height - 35), (width, height), (25, 25, 25), -1)
+    cv2.putText(image, "F8: pause/resume   F9: exit", (12, height - 12),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+    if direction:
+        x = int(width * 0.86)
+        top, bottom = int(height * 0.37), int(height * 0.63)
+        start, end = ((x, bottom), (x, top)) if direction == "up" else ((x, top), (x, bottom))
+        cv2.arrowedLine(image, start, end, (15, 15, 15), 18, cv2.LINE_AA, tipLength=0.38)
+        cv2.arrowedLine(image, start, end, (0, 255, 0), 10, cv2.LINE_AA, tipLength=0.38)
+    return image
