@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import time
 import camera
+import gestures
 
 
 # the boilerplate new API setup for configuring the detector
@@ -23,6 +24,9 @@ landmarker = HandLandmarker.create_from_options(options)
 def main():
     cap = camera.setup_camera()
     timestamp_ms = 0
+    gesture_label = "Show one hand to swipe"
+    label_frames_left = 0
+    gestures.reset()
 
     while cap.isOpened():
         success, frame = cap.read()
@@ -50,8 +54,28 @@ def main():
             timestamp_ms
         )
 
+        height, width = image.shape[:2]
+        gestures.update_history(result, timestamp_ms, width, height)
+        gesture = gestures.detect_gesture()
+        if gesture:
+            print(gesture)
+            gesture_label = gesture.replace("_", " ")
+            label_frames_left = 30
+
         # draw landmarks
         image = camera.draw_landmarks_on_hands(image, result)
+
+        if label_frames_left > 0:
+            label_frames_left -= 1
+        else:
+            if len(result.hand_landmarks) != 1:
+                gesture_label = "Show one hand to swipe"
+            elif gestures.waiting_for_rest:
+                gesture_label = "Hold hand steady"
+            else:
+                gesture_label = "Ready to swipe"
+        cv2.putText(image, gesture_label, (20, 35),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
         # Display landmarked hand(s)
         cv2.imshow("Frame", image)
