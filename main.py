@@ -1,95 +1,90 @@
 import cv2
 import mediapipe as mp
-import time
 import camera
 import gestures
+import computer_inputs
 
+WINDOW_TITLE = "Gesture Control"
 
-# the boilerplate new API setup for configuring the detector
-BaseOptions = mp.tasks.BaseOptions
-HandLandmarker = mp.tasks.vision.HandLandmarker
-HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
-RunningMode = mp.tasks.vision.RunningMode
-
-options = HandLandmarkerOptions(
-    base_options=BaseOptions(
-        model_asset_path="hand_landmarker.task"
-    ),
-    running_mode=RunningMode.VIDEO,
-    num_hands=2
-)
-
-landmarker = HandLandmarker.create_from_options(options)
 
 def main():
-    cap = camera.setup_camera()
+    backend = computer_inputs.WindowsInput()
+    scrolling = computer_inputs.ScrollController(backend)
+    options = mp.tasks.vision.HandLandmarkerOptions(
+        base_options=mp.tasks.BaseOptions(model_asset_path="hand_landmarker.task"),
+        running_mode=mp.tasks.vision.RunningMode.VIDEO,
+        num_hands=2,
+    )
+    cap = None
+    paused = False
+    previous_target = None
     timestamp_ms = 0
-    gesture_label = "Show one hand to swipe"
-    label_frames_left = 0
     gestures.reset()
+    with mp.tasks.vision.HandLandmarker.create_from_options(options) as landmarker:
+        try:
+            cap = camera.setup_camera()
+            if not cap.isOpened():
+                raise RuntimeError("Could not open the webcam.")
+            cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(WINDOW_TITLE, 480, 360)
+            backend.pin_preview(WINDOW_TITLE)
+            while cap.isOpened():
+                toggle_pause, quit_requested = backend.shortcuts()
+                if quit_requested:
+                    break
+                if toggle_pause:
+                    paused = not paused
+                    scrolling.cancel()
+                    gestures.reset()
+                success, frame = cap.read()
+                if not success:
+                    scrolling.cancel()
+                    raise RuntimeError("Webcam capture stopped. Restart the application to retry.")
 
-    while cap.isOpened():
-        success, frame = cap.read()
-        attempts = 0
+                image, mp_image = camera.prepare_frame(frame)
+                timestamp_ms += 1
+                result = camera.track_hands(landmarker, mp_image, timestamp_ms)
+                height, width = image.shape[:2]
+                target = backend.target()
+                if target != previous_target:
+                    scrolling.cancel()
+                    gestures.reset()
+                previous_target = target
+                allowed = not paused and target is not None and len(result.hand_landmarks) == 1
+                if allowed:
+                    gestures.update_history(result, timestamp_ms, width, height)
+                    # Discard gestures during a burst rather than queue them.
+                    gesture = gestures.detect_gesture()
+                    if gesture:
+                        scrolling.start(gesture, target)
+                else:
+                    gestures.reset()
+                scrolling.tick(allowed)
 
-        while not success and attempts <= 5:  # caps our attempts to retry getting frames
-            time.sleep(1)
-            attempts += 1
-            success, frame = cap.read()
-
-        if not success:
-            print("Frame is not being captured in main")
-            break
-
-        # Prepare the frame
-        image, mp_image = camera.prepare_frame(frame) # image -> mirroring, mp_image -> mediapipe
-
-        # Mediapipe needs a timestamp for video mode
-        timestamp_ms += 1
-
-        # detect landmarks
-        result = camera.track_hands(
-            landmarker,
-            mp_image,
-            timestamp_ms
-        )
-
-        height, width = image.shape[:2]
-        gestures.update_history(result, timestamp_ms, width, height)
-        gesture = gestures.detect_gesture()
-        if gesture:
-            print(gesture)
-            gesture_label = gesture.replace("_", " ")
-            label_frames_left = 30
-
-        # draw landmarks
-        image = camera.draw_landmarks_on_hands(image, result)
-
-        if label_frames_left > 0:
-            label_frames_left -= 1
-        else:
-            if len(result.hand_landmarks) != 1:
-                gesture_label = "Show one hand to swipe"
-            elif gestures.waiting_for_rest:
-                gesture_label = "Hold hand steady"
-            else:
-                gesture_label = "Ready to swipe"
-        cv2.putText(image, gesture_label, (20, 35),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-        # Display landmarked hand(s)
-        cv2.imshow("Frame", image)
-
-        # how to close the window capture by breaking the while loop
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-
-
-    cap.release()
-    cv2.destroyAllWindows()
-    landmarker.close()
-
+                if paused:
+                    label = "Paused - F8 to resume"
+                elif target is None:
+                    label = "Click browser; point at page"
+                elif len(result.hand_landmarks) != 1:
+                    label = "Show one hand to swipe"
+                elif scrolling.direction:
+                    label = "Scrolling " + scrolling.direction
+                elif gestures.waiting_for_rest:
+                    label = "Hold hand steady"
+                else:
+                    label = "Ready to swipe"
+                image = camera.draw_landmarks_on_hands(image, result)
+                camera.draw_scroll_feedback(image, scrolling.direction, label)
+                cv2.imshow(WINDOW_TITLE, image)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                if cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
+                    break
+        finally:
+            scrolling.cancel()
+            if cap is not None:
+                cap.release()
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
