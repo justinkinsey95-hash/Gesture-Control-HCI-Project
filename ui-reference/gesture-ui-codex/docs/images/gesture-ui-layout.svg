@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="850" viewBox="0 0 960 850">
+<rect width="960" height="850" rx="24" fill="#111827"/>
+<text x="36" y="57" font-family="Arial" font-size="29" font-weight="bold" fill="#f9fafb">Gesture Control</text>
+<rect x="778" y="22" width="148" height="48" rx="24" fill="#065f46"/><circle cx="800" cy="46" r="7" fill="#6ee7b7"/><text x="820" y="54" font-family="Arial" font-size="19" fill="#d1fae5">ACTIVE</text>
+<rect x="24" y="90" width="912" height="174" rx="15" fill="#1f2937"/>
+<text x="45" y="126" font-family="Arial" font-size="22" fill="#f9fafb">Getting Started</text><text x="830" y="126" font-family="Arial" font-size="16" fill="#6ee7b7">Step 3 of 4</text>
+<g font-family="Arial" font-size="17" text-anchor="middle">
+<circle cx="155" cy="180" r="28" fill="#374151"/><text x="155" y="187" fill="#d1d5db" font-size="23">➤</text><text x="155" y="227" fill="#9ca3af">Select browser</text>
+<circle cx="365" cy="180" r="28" fill="#374151"/><text x="365" y="188" fill="#d1d5db" font-size="25">✊</text><text x="365" y="227" fill="#9ca3af">Make a fist</text>
+<circle cx="580" cy="180" r="28" fill="#065f46"/><text x="580" y="187" fill="#6ee7b7" font-size="28">↕</text><text x="580" y="227" fill="#6ee7b7">Gesture</text>
+<circle cx="790" cy="180" r="28" fill="#374151"/><text x="790" y="188" fill="#d1d5db" font-size="25">✊</text><text x="790" y="227" fill="#9ca3af">Stop</text>
+</g>
+<text x="45" y="251" font-family="Arial" font-size="16" fill="#f9fafb">Move your index finger up or down to scroll.</text>
+<rect x="24" y="282" width="912" height="450" rx="14" fill="#1f2937"/><rect x="37" y="295" width="886" height="424" rx="8" fill="#293647"/>
+<rect x="177" y="345" width="606" height="300" rx="20" fill="none" stroke="#506278" stroke-width="3" stroke-dasharray="12 10"/>
+<text x="480" y="464" text-anchor="middle" font-family="Arial" font-size="34" fill="#93a4b8">LIVE CAMERA PREVIEW</text>
+<text x="480" y="504" text-anchor="middle" font-family="Arial" font-size="19" fill="#93a4b8">Mirrored video + MediaPipe hand landmarks</text>
+<rect x="24" y="748" width="443" height="77" rx="12" fill="#1f2937"/><rect x="482" y="748" width="454" height="77" rx="12" fill="#1f2937"/>
+<text x="43" y="778" font-family="Arial" font-size="14" fill="#9ca3af">CURRENT / COMPLETED</text><text x="43" y="806" font-family="Arial" font-size="20" fill="#f9fafb">✓ Fist recognized · Active</text>
+<text x="501" y="778" font-family="Arial" font-size="14" fill="#9ca3af">NEXT ACTION</text><text x="501" y="806" font-family="Arial" font-size="20" fill="#f9fafb">↕ Swipe to scroll</text>
+</svg>

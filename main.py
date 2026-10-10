@@ -3,11 +3,13 @@ import mediapipe as mp
 import camera
 import gestures
 import computer_inputs
+import ui
 
 WINDOW_TITLE = "Gesture Control"
 
 
 def main():
+    ui.enable_windows_dpi_awareness()
     backend = computer_inputs.WindowsInput()
     scrolling = computer_inputs.ScrollController(backend)
     fist = gestures.FistToggle()
@@ -27,8 +29,8 @@ def main():
             cap = camera.setup_camera()
             if not cap.isOpened():
                 raise RuntimeError("Could not open the webcam.")
-            cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(WINDOW_TITLE, 480, 360)
+            cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
+            cv2.resizeWindow(WINDOW_TITLE, *ui.DEFAULT_SIZE)
             backend.pin_preview(WINDOW_TITLE)
             while cap.isOpened():
                 toggle_pause, quit_requested = backend.shortcuts()
@@ -70,21 +72,18 @@ def main():
                     finger.reset()
                 scrolling.tick(allowed)
 
-                if paused:
-                    label = "Paused - F8 to resume"
-                elif target is None:
-                    label = "Click browser; point at page"
-                elif scrolling.direction:
-                    label = "Scrolling " + scrolling.direction + " - fist 1s to stop"
-                elif not fist.enabled:
-                    label = "Hold closed fist 1.25s to enable"
-                elif len(result.hand_landmarks) != 1:
-                    label = "Show one hand to swipe"
-                else:
-                    label = finger.label
+                presentation = ui.derive_ui_state(
+                    paused=paused, target_available=target is not None,
+                    fist_enabled=fist.enabled, fist_visible=fist.fist_visible,
+                    hold_seconds=fist.hold_seconds,
+                    required_hold_seconds=fist.required_hold_seconds,
+                    scrolling_direction=scrolling.direction,
+                    hand_count=len(result.hand_landmarks), finger_label=finger.label,
+                    fist_latched=fist.latched,
+                )
                 image = camera.draw_landmarks_on_hands(image, result)
-                camera.draw_scroll_feedback(image, scrolling.direction, label, fist.hold_label)
-                cv2.imshow(WINDOW_TITLE, image)
+                cv2.imshow(WINDOW_TITLE, ui.compose_frame(
+                    image, presentation, ui.window_render_size(WINDOW_TITLE)))
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 if cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:

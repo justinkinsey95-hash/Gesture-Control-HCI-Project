@@ -59,31 +59,3 @@ def draw_landmarks_on_hands(image, result):
             cv2.circle(image, (x, y), 5, (0, 255, 0), -1)
 
     return image
-
-
-def draw_scroll_feedback(image, direction, label, fist_label=""):
-    """Draw status and fist timing beside each other, plus a scroll arrow."""
-    height, width = image.shape[:2]
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = min(0.7, width / 900)
-    # Fit both labels on the same row, including the longest scrolling status.
-    text_width = sum(cv2.getTextSize(text, font, scale, 1)[0][0]
-                     for text in (label, fist_label))
-    if text_width > width - 36:
-        scale *= (width - 36) / text_width
-    cv2.rectangle(image, (0, 0), (width, 53), (25, 25, 25), -1)
-    cv2.putText(image, label, (12, 33), font,
-                scale, (0, 255, 0), 1, cv2.LINE_AA)
-    label_width = cv2.getTextSize(label, font, scale, 1)[0][0]
-    cv2.putText(image, fist_label, (24 + label_width, 33), font,
-                scale, (0, 220, 255), 1, cv2.LINE_AA)
-    cv2.rectangle(image, (0, height - 35), (width, height), (25, 25, 25), -1)
-    cv2.putText(image, "F8: pause/resume   F9: exit", (12, height - 12),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-    if direction:
-        x = int(width * 0.86)
-        top, bottom = int(height * 0.37), int(height * 0.63)
-        start, end = ((x, bottom), (x, top)) if direction == "up" else ((x, top), (x, bottom))
-        cv2.arrowedLine(image, start, end, (15, 15, 15), 18, cv2.LINE_AA, tipLength=0.38)
-        cv2.arrowedLine(image, start, end, (0, 255, 0), 10, cv2.LINE_AA, tipLength=0.38)
-    return image
