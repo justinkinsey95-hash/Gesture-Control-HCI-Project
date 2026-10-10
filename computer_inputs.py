@@ -5,7 +5,7 @@ import os
 from time import perf_counter
 
 SCROLL_SECONDS = 0.45
-SCROLL_AMOUNT = 120  # One wheel notch, delivered in small increments.
+SCROLL_AMOUNT = 120  # Wheel units per SCROLL_SECONDS, delivered in small increments.
 MAX_STEP = 12
 STALL_SECONDS = 0.15
 BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}
@@ -98,7 +98,7 @@ class WindowsInput:
 
 
 class ScrollController:
-    """No sleeping, held keys, or queued swipes; advance once per camera frame."""
+    """Scroll continuously until cancelled; advance once per camera frame."""
     def __init__(self, backend, clock=perf_counter):
         self.backend, self.clock = backend, clock
         self.direction = None
@@ -124,9 +124,7 @@ class ScrollController:
             self.cancel()
             return
         self.last_tick = now
-        progress = min(1.0, max(0.0, (now - self.started) / SCROLL_SECONDS))
-        eased = progress * progress * (3 - 2 * progress)
-        desired = round(SCROLL_AMOUNT * eased)
+        desired = int(max(0.0, now - self.started) * SCROLL_AMOUNT / SCROLL_SECONDS)
         delta = min(MAX_STEP, max(0, desired - self.sent))
         if delta:
             try:
@@ -134,7 +132,5 @@ class ScrollController:
             except OSError:
                 self.cancel()
                 raise
-            self.sent += delta
-        if progress >= 1:
-            # Never flush a large remainder after slow frames.
-            self.cancel()
+        # Drop any excess rather than accumulating a backlog on slow frames.
+        self.sent = desired

@@ -25,18 +25,22 @@ class ScrollTests(unittest.TestCase):
         self.now = seconds
         self.scroll.tick(allowed)
 
-    def test_smooth_burst_both_directions(self):
+    def test_continuous_scroll_both_directions(self):
         for gesture, sign in (("SWIPE_UP", 1), ("SWIPE_DOWN", -1)):
             with self.subTest(gesture=gesture):
                 self.setUp()
                 self.assertTrue(self.scroll.start(gesture, 123))
                 self.assertEqual(self.backend.events, [])
-                for frame in range(1, 16):
+                for frame in range(1, 301):
                     self.advance(frame / 30)
-                self.assertEqual(sum(self.backend.events), SCROLL_AMOUNT * sign)
+                self.assertGreater(sum(self.backend.events) * sign, SCROLL_AMOUNT)
                 self.assertGreater(len(self.backend.events), 8)
                 self.assertTrue(all(0 < abs(delta) <= MAX_STEP for delta in self.backend.events))
-                self.assertIsNone(self.scroll.direction)
+                self.assertEqual(self.scroll.direction, "up" if sign == 1 else "down")
+                self.scroll.cancel()
+                count = len(self.backend.events)
+                self.advance(10.03)
+                self.assertEqual(len(self.backend.events), count)
 
     def test_focus_change_cancels_without_input(self):
         self.scroll.start("SWIPE_UP", 123)
@@ -45,7 +49,7 @@ class ScrollTests(unittest.TestCase):
         self.assertEqual(self.backend.events, [])
         self.assertIsNone(self.scroll.direction)
 
-    def test_pause_or_tracking_loss_cancels_without_resume(self):
+    def test_disallowed_input_cancels_without_resume(self):
         self.scroll.start("SWIPE_UP", 123)
         self.advance(.03, allowed=False)
         self.advance(.06)
@@ -64,7 +68,7 @@ class ScrollTests(unittest.TestCase):
         self.assertFalse(self.scroll.start("SWIPE_DOWN", 123))
         for frame in range(1, 20):
             self.advance(frame / 30)
-        self.assertEqual(sum(self.backend.events), SCROLL_AMOUNT)
+        self.assertGreater(sum(self.backend.events), SCROLL_AMOUNT)
 
     def test_invalid_gesture_or_target_is_ignored(self):
         self.assertFalse(self.scroll.start("SWIPE_UP", None))
@@ -85,7 +89,7 @@ class ScrollTests(unittest.TestCase):
             self.advance(index * .1)
         self.assertTrue(all(delta <= MAX_STEP for delta in self.backend.events))
         self.assertLess(sum(self.backend.events), SCROLL_AMOUNT)
-        self.assertIsNone(self.scroll.direction)
+        self.assertEqual(self.scroll.direction, "up")
 
 
 if __name__ == "__main__":

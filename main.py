@@ -10,6 +10,8 @@ WINDOW_TITLE = "Gesture Control"
 def main():
     backend = computer_inputs.WindowsInput()
     scrolling = computer_inputs.ScrollController(backend)
+    fist = gestures.FistToggle()
+    finger = gestures.FingerScrollGesture()
     options = mp.tasks.vision.HandLandmarkerOptions(
         base_options=mp.tasks.BaseOptions(model_asset_path="hand_landmarker.task"),
         running_mode=mp.tasks.vision.RunningMode.VIDEO,
@@ -36,6 +38,8 @@ def main():
                     paused = not paused
                     scrolling.cancel()
                     gestures.reset()
+                    fist.reset()
+                    finger.reset()
                 success, frame = cap.read()
                 if not success:
                     scrolling.cancel()
@@ -49,32 +53,37 @@ def main():
                 if target != previous_target:
                     scrolling.cancel()
                     gestures.reset()
+                    fist.reset()
+                    finger.reset()
                 previous_target = target
-                allowed = not paused and target is not None and len(result.hand_landmarks) == 1
-                if allowed:
-                    gestures.update_history(result, timestamp_ms, width, height)
-                    # Discard gestures during a burst rather than queue them.
-                    gesture = gestures.detect_gesture()
+                allowed = not paused and target is not None
+                if allowed and fist.update(result):
+                    gestures.reset()
+                    finger.reset()
+                    if not fist.enabled:
+                        scrolling.cancel()
+                if allowed and fist.enabled and not scrolling.direction:
+                    gesture = finger.update(result, width, height)
                     if gesture:
                         scrolling.start(gesture, target)
                 else:
-                    gestures.reset()
+                    finger.reset()
                 scrolling.tick(allowed)
 
                 if paused:
                     label = "Paused - F8 to resume"
                 elif target is None:
                     label = "Click browser; point at page"
+                elif scrolling.direction:
+                    label = "Scrolling " + scrolling.direction + " - fist 1s to stop"
+                elif not fist.enabled:
+                    label = "Hold closed fist 1.25s to enable"
                 elif len(result.hand_landmarks) != 1:
                     label = "Show one hand to swipe"
-                elif scrolling.direction:
-                    label = "Scrolling " + scrolling.direction
-                elif gestures.waiting_for_rest:
-                    label = "Hold hand steady"
                 else:
-                    label = "Ready to swipe"
+                    label = finger.label
                 image = camera.draw_landmarks_on_hands(image, result)
-                camera.draw_scroll_feedback(image, scrolling.direction, label)
+                camera.draw_scroll_feedback(image, scrolling.direction, label, fist.hold_label)
                 cv2.imshow(WINDOW_TITLE, image)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break

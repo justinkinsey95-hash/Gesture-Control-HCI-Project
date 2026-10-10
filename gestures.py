@@ -23,6 +23,144 @@ waiting_for_rest = True
 rest_position = None
 rest_started_at = None
 
+FIST_HOLD_SECONDS = 1.25
+FIST_STOP_SECONDS = 1.0
+
+
+def is_closed_fist(hand):
+    """Four curled fingers, independent of hand side and image rotation."""
+    wrist = hand[0]
+    def distance(point):
+        return hypot(point.x - wrist.x, point.y - wrist.y)
+    return all(distance(hand[tip]) < distance(hand[pip]) * 0.9
+               for pip, tip in ((6, 8), (10, 12), (14, 16), (18, 20)))
+
+
+class FingerScrollGesture:
+    """Read extension/return from a fist before choosing a scroll direction."""
+    HOLD_SECONDS = 1.0
+    EXTEND_DISTANCE = 0.45
+    RETURN_DISTANCE = 0.30
+
+    def __init__(self, clock=perf_counter):
+        self.clock = clock
+        self.reset()
+
+    def reset(self):
+        self.baseline = self.peak = self.raised_at = self.last_seen = None
+        self.hold_seconds = 0.0
+
+    @property
+    def label(self):
+        if self.raised_at is not None:
+            return f"Finger up: {self.hold_seconds:.1f}/1.0s"
+        if self.baseline is None:
+            return "Close fist to set start pose"
+        return "Raise index; hold up or return down"
+
+    def update(self, result, width, height):
+        now = self.clock()
+        if len(result.hand_landmarks) != 1:
+            self.reset()
+            return None
+        if self.last_seen is not None and now - self.last_seen > 0.5:
+            self.reset()
+        self.last_seen = now
+        hand = result.hand_landmarks[0]
+        palm_size = hypot((hand[5].x - hand[0].x) * width,
+                          (hand[5].y - hand[0].y) * height)
+        if palm_size < 1:
+            self.reset()
+            return None
+        # Remove whole-hand translation and scale by the visible palm size.
+        position = (hand[8].y - (hand[0].y + hand[5].y) / 2) * height / palm_size
+        closed = is_closed_fist(hand)
+        if self.baseline is None:
+            if closed:
+                self.baseline = position
+            return None
+        extension = self.baseline - position
+        if self.raised_at is None:
+            if closed:
+                self.baseline = position
+            elif extension >= self.EXTEND_DISTANCE:
+                self.raised_at = now
+                self.peak = extension
+            return None
+        self.peak = max(self.peak, extension)
+        # Wait for the return before assigning down; the outward stroke alone
+        # cannot distinguish a quick down gesture from a held up gesture.
+        if self.peak - extension >= self.RETURN_DISTANCE or closed:
+            self.reset()
+            return "SWIPE_DOWN"
+        self.hold_seconds = now - self.raised_at
+        if self.hold_seconds >= self.HOLD_SECONDS:
+            self.reset()
+            return "SWIPE_UP"
+        return None
+
+
+class FistToggle:
+    """Require a fresh, continuously observed fist hold per toggle."""
+    def __init__(self, clock=perf_counter):
+        self.clock = clock
+        self.reset()
+
+    def reset(self):
+        self.enabled = False
+        self.started = self.last_seen = None
+        self.latched = False
+        self.fist_visible = False
+        self.registered_seconds = None
+
+    @property
+    def required_hold_seconds(self):
+        return FIST_STOP_SECONDS if self.enabled else FIST_HOLD_SECONDS
+
+    @property
+    def hold_seconds(self):
+        """Elapsed observed hold time for feedback, reset on interruption."""
+        if not self.fist_visible:
+            return 0.0
+        if self.latched:
+            return self.registered_seconds
+        if self.started is None:
+            return 0.0
+        return min(self.required_hold_seconds, max(0.0, self.last_seen - self.started))
+
+    @property
+    def hold_label(self):
+        if self.fist_visible and self.latched:
+            return f"Fist: {self.registered_seconds:.2f}/{self.registered_seconds:.2f}s - release"
+        state = "tracking" if self.fist_visible else "waiting"
+        return f"Fist: {self.hold_seconds:.2f}/{self.required_hold_seconds:.2f}s - {state}"
+
+    def update(self, result):
+        now = self.clock()
+        if self.last_seen is not None and now - self.last_seen > 0.5:
+            self.started = None
+        self.last_seen = now
+        self.fist_visible = (len(result.hand_landmarks) == 1
+                             and is_closed_fist(result.hand_landmarks[0]))
+        if len(result.hand_landmarks) != 1:
+            self.started = None
+            return False
+        if not is_closed_fist(result.hand_landmarks[0]):
+            self.started = None
+            self.latched = False
+            return False
+        if self.latched:
+            return False
+        if self.started is None:
+            self.started = now
+        if now - self.started >= self.required_hold_seconds:
+            self.registered_seconds = self.required_hold_seconds
+            self.enabled = not self.enabled
+            self.latched = True
+            self.started = None
+            return True
+        return False
+
 
 def reset():
     global waiting_for_rest, rest_position, rest_started_at
