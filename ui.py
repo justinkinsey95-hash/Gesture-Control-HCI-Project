@@ -234,10 +234,10 @@ def compose_frame(camera_image, state, size=DEFAULT_SIZE):
     for row, value in enumerate(wrap_text(state.guidance, 506, .55, measure)):
         words(value, 22, 185 + row * 19, .55)
     if state.progress is not None:
-        box(22, 213, 275, 5, (71, 55, 40))
+        box(22, 211, 285, 9, (71, 55, 40))
         if state.progress > 0:
-            box(22, 213, 275 * state.progress, 5, green)
-        words(state.timer, 313, 219, .43, green)
+            box(22, 211, 285 * state.progress, 9, green)
+        words(state.timer, 319, 219, .49, green)
 
     box(10, 234, 530, 238)
     # The only raster resampling is the video, before any UI text is drawn.
@@ -250,13 +250,25 @@ def compose_frame(camera_image, state, size=DEFAULT_SIZE):
     interpolation = cv2.INTER_AREA if video_scale < 1 else cv2.INTER_LINEAR
     video = cv2.resize(camera_image, (video_w, video_h), interpolation=interpolation)
     x, y = left + (area_w - video_w) // 2, top + (area_h - video_h) // 2
+    # Normally the aspect-ratio padding provides the arrow's right gutter.
+    # Reserve a gutter for unusually wide feeds too, without stretching video.
+    gutter = round(64 * unit)
+    if state.direction and right - (x + video_w) < gutter:
+        video_scale = min((area_w - gutter) / w, area_h / h)
+        video_w, video_h = max(1, round(w * video_scale)), max(1, round(h * video_scale))
+        interpolation = cv2.INTER_AREA if video_scale < 1 else cv2.INTER_LINEAR
+        video = cv2.resize(camera_image, (video_w, video_h), interpolation=interpolation)
+        x = left + (area_w - gutter - video_w) // 2
+        y = top + (area_h - video_h) // 2
     canvas[y:y + video_h, x:x + video_w] = video
     if state.direction:
-        arrow_x = x + video_w - round(22 * unit)
-        arrow_top, arrow_bottom = y + video_h // 3, y + 2 * video_h // 3
+        camera_right = x + video_w
+        arrow_x = (camera_right + right) // 2
+        center_y = y + video_h // 2
+        arrow_half = round(min(video_h * .28, (right - camera_right) * .75))
+        arrow_top, arrow_bottom = center_y - arrow_half, center_y + arrow_half
         start, end = ((arrow_x, arrow_bottom), (arrow_x, arrow_top)) if state.direction == "up" else ((arrow_x, arrow_top), (arrow_x, arrow_bottom))
-        cv2.arrowedLine(canvas, start, end, bg, stroke(6), aa, tipLength=.25)
-        cv2.arrowedLine(canvas, start, end, green, stroke(3), aa, tipLength=.25)
+        cv2.arrowedLine(canvas, start, end, green, stroke(6), aa, tipLength=.25)
 
     for x, heading, value in ((10, "CURRENT / COMPLETED", state.current),
                               (280, "NEXT ACTION", state.next_action)):
